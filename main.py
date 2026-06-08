@@ -1,6 +1,6 @@
 import threading
 import time
-from matrix_client import MatrixClient
+from async_matrix_client import MatrixClient
 
 # Configurações do Usuário (Altere para os seus dados de teste)
 HOMESERVER = "matrix-client.matrix.org"
