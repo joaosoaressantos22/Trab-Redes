@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>Matrix BFF | Web Client</title>
+    <style>
+        :root {
+            --bg-dark: #121212; --bg-panel: #1e1e2e; --bg-input: #2a2a3b;
+            --text-main: #e0e0e0; --text-muted: #8b8b9e;
+            --primary: #7289da; --primary-hover: #5b6eae;
+            --bubble-recv: #2a2a3b; --bubble-sent: #7289da;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Layout Principal */
+        #app-container { display: flex; height: 100%; width: 100%; }
+        
+        /* Sidebar de Configuração */
+        #sidebar { width: 300px; background-color: var(--bg-panel); padding: 20px; display: flex; flex-direction: column; gap: 15px; border-right: 1px solid #333; }
+        h2 { font-size: 1.2rem; margin-bottom: 10px; color: #fff; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-size: 0.85rem; color: var(--text-muted); }
+        input[type="text"], input[type="password"] {
+            background-color: var(--bg-input); border: 1px solid #444; color: #fff; padding: 10px; border-radius: 5px; outline: none;
+        }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--primary); }
+        button { background-color: var(--primary); color: #fff; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #444; cursor: not-allowed; }
+        
+        #connection-status { margin-top: auto; padding: 10px; border-radius: 5px; font-size: 0.85rem; text-align: center; background: #333; }
+        .status-ok { background: #2e7d32 !important; }
+        .status-error { background: #c62828 !important; }
+
+        /* Área do Chat */
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background-color: var(--bg-dark); position: relative; }
+        #chat-header { padding: 15px 20px; background-color: var(--bg-panel); border-bottom: 1px solid #333; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
+        
+        #messages-container { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* Bolhas de Mensagem */
+        .message-wrapper { display: flex; flex-direction: column; max-width: 70%; }
+        .message-wrapper.recv { align-self: flex-start; }
+        .message-wrapper.sent { align-self: flex-end; align-items: flex-end; }
+        
+        .message-sender { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 3px; }
+        
+        .message-bubble { padding: 10px 14px; border-radius: 8px; font-size: 0.95rem; line-height: 1.4; word-wrap: break-word; }
+        .recv .message-bubble { background-color: var(--bubble-recv); border-bottom-left-radius: 0; }
+        .sent .message-bubble { background-color: var(--bubble-sent); border-bottom-right-radius: 0; color: #fff; }
+        
+        .message-time { font-size: 0.7rem; margin-top: 5px; color: var(--text-muted); text-align: right; }
+        .sent .message-time { color: #d0d0d0; }
+
+        /* Mídia L7 */
+        .media-container { margin-top: 5px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; }
+        .media-container img { max-width: 100%; max-height: 300px; border-radius: 5px; }
+        .media-container video { max-width: 100%; max-height: 300px; border-radius: 5px; }
+        .btn-download { background: #444; font-size: 0.8rem; padding: 5px 10px; margin-top: 5px; display: inline-block; }
+
+        /* Input Area */
+        #input-area { padding: 15px 20px; background-color: var(--bg-panel); display: flex; gap: 10px; align-items: center; }
+        #input-msg { flex-grow: 1; background-color: var(--bg-input); border: none; padding: 15px; color: #fff; border-radius: 8px; outline: none; }
+        
+        #btn-attach { background-color: #444; border-radius: 50%; width: 45px; height: 45px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        #btn-attach:hover { background-color: #555; }
+        #file-input-hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="sidebar">
+        <h2>Matrix BFF L4/L7</h2>
+        
+        <div class="input-group">
+            <label>Usuário</label>
+            <input type="text" id="user" placeholder="ex: redes2026" value="redes2026">
+        </div>
+        <div class="input-group">
+            <label>Senha</label>
+            <input type="password" id="passwd" placeholder="Sua senha">
+        </div>
+        <button id="btn-login" onclick="conectar()">Conectar & Autenticar</button>
+        
+        <hr style="border:0; border-top: 1px solid #444; margin: 10px 0;">
+        
+        <div class="input-group">
+            <label>ID da Sala (Obrigatório)</label>
+            <input type="text" id="room" placeholder="!exemplo:matrix.org">
+        </div>
+        
+        <div id="connection-status">Aguardando Conexão...</div>
+    </div>
+
+    <div id="chat-area">
+        <div id="chat-header">
+            <span id="current-room-display">Nenhuma sala conectada</span>
+            <span id="sys-status" style="font-size: 0.8rem; color: #888;">Bare-Metal TCP Ocioso</span>
+        </div>
+        
+        <div id="messages-container">
+            </div>
+        
+        <div id="input-area">
+            <label id="btn-attach" for="file-input-hidden" title="Anexar Ficheiro">📎</label>
+            <input type="file" id="file-input-hidden" onchange="processarUpload()">
+            
+            <input type="text" id="input-msg" placeholder="Escreva uma mensagem..." disabled onkeypress="verificarEnter(event)">
+            <button id="btn-send" onclick="enviarMensagem()" disabled>Enviar L7</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let ws;
+    let userIdLocal = "";
+    const msgContainer = document.getElementById('messages-container');
+    const statusBox = document.getElementById('connection-status');
+    const sysStatus = document.getElementById('sys-status');
+
+    function formatarTempo(ts) {
+        if (!ts) return new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return new Date(ts).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+
+    function scrollBottom() {
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    function atualizarStatus(texto, tipo = 'normal') {
+        statusBox.innerText = texto;
+        statusBox.className = tipo === 'ok' ? 'status-ok' : (tipo === 'erro' ? 'status-error' : '');
+    }
+
+    function construirBolhaHTML(remetente, texto, isOwn, ts, mxc = null) {
+        const wrapClass = isOwn ? 'sent' : 'recv';
+        const displayNome = isOwn ? 'Você' : remetente;
+        const timeStr = formatarTempo(ts);
+        const mxcClean = mxc ? mxc.replace(/[^a-zA-Z0-9]/g, '') : '';
+        
+        let contentHTML = `<div class="message-bubble">${texto}</div>`;
+        
+        if (mxc) {
+            contentHTML = `
+            <div class="message-bubble">
+                <i>Anexo L7 recebido: ${texto}</i>
+                <div class="media-container" id="media_${mxcClean}">
+                    <button class="btn-download" onclick="solicitarStream('${mxc}', '${mxcClean}')">⬇️ Descarregar Stream Binário</button>
+                </div>
+            </div>`;
+        }
+
+        return `
+        <div class="message-wrapper ${wrapClass}">
+            ${!isOwn ? `<div class="message-sender">${displayNome}</div>` : ''}
+            ${contentHTML}
+            <div class="message-time">${timeStr}</div>
+        </div>`;
+    }
+
+    function conectar() {
+        atualizarStatus("Negociando Handshake...", "normal");
+        ws = new WebSocket("ws://localhost:8765");
+        
+        ws.onopen = () => {
+            atualizarStatus("Conectado L4. Autenticando...", "normal");
+            ws.send(JSON.stringify({
+                acao: "login",
+                usuario: document.getElementById('user').value,
+                senha: document.getElementById('passwd').value
+            }));
+        };
+
+        ws.onmessage = (e) => {
+            const dados = JSON.parse(e.data);
+            
+            if (dados.tipo === "status") {
+                if (dados.sucesso) {
+                    userIdLocal = dados.user_id;
+                    atualizarStatus("Autenticado. Long-polling Ativo.", "ok");
+                    document.getElementById('input-msg').disabled = false;
+                    document.getElementById('btn-send').disabled = false;
+                    
+                    const sala = document.getElementById('room').value;
+                    document.getElementById('current-room-display').innerText = sala ? sala : "Aviso: ID da sala vazio.";
+                    sysStatus.innerText = "Asyncio Syncing L7...";
+                } else {
+                    atualizarStatus("Falha de Credenciais", "erro");
+                }
+            }
+            else if (dados.tipo === "mensagem") {
+                msgContainer.innerHTML += construirBolhaHTML(dados.remetente, dados.texto, dados.propria, dados.timestamp, dados.url);
+                scrollBottom();
+            }
+            else if (dados.tipo === "status_midia") {
+                sysStatus.innerText = dados.sucesso ? "Upload Concluído" : "Erro no Upload";
+                setTimeout(() => sysStatus.innerText = "Asyncio Syncing L7...", 3000);
+            }
+            else if (dados.tipo === "midia_baixada") {
+                renderizarMidia(dados.mxc, dados.mime_type, dados.base64);
+            }
+        };
+        
+        ws.onclose = () => atualizarStatus("Socket Desconectado", "erro");
+    }
+
+    function verificarEnter(e) {
+        if (e.key === 'Enter') enviarMensagem();
+    }
+
+    function enviarMensagem() {
+        const input = document.getElementById('input-msg');
+        const sala = document.getElementById('room').value;
+        const texto = input.value.trim();
+        
+        if (!ws || ws.readyState !== WebSocket.OPEN) return alert("Estabeleça a conexão primeiro.");
+        if (sala === "") return alert("Preencha o ID da sala no painel lateral.");
+        if (texto === "") return;
+
+        ws.send(JSON.stringify({
+            acao: "enviar", sala: sala, texto: texto
+        }));
+        
+        input.value = "";
+    }
+
+    function processarUpload() {
+        const sala = document.getElementById('room').value;
+        const fileInput = document.getElementById('file-input-hidden');
+        if (fileInput.files.length === 0) return;
+        if (sala === "") { alert("Preencha a Sala antes de anexar."); return; }
+
+        const arquivo = fileInput.files[0];
+        const reader = new FileReader();
+
+        sysStatus.innerText = "A encriptar em Base64 e despachar...";
+
+        reader.onload = function(e) {
+            const base64Puro = e.target.result.split(',')[1];
+            ws.send(JSON.stringify({
+                acao: "enviar_midia",
+                sala: sala,
+                nome_arquivo: arquivo.name,
+                mime_type: arquivo.type || "application/octet-stream",
+                base64: base64Puro
+            }));
+            fileInput.value = ""; 
+        };
+        reader.readAsDataURL(arquivo);
+    }
+
+    function solicitarStream(mxc, mxcClean) {
+        const container = document.getElementById(`media_${mxcClean}`);
+        if(container) container.innerHTML = `<span style="color:#ffb300; font-size:0.8rem;">Descarregando blocos TCP...</span>`;
+        ws.send(JSON.stringify({ acao: "baixar_midia", mxc: mxc }));
+    }
+
+    function renderizarMidia(mxc, mime, b64) {
+        const mxcClean = mxc.replace(/[^a-zA-Z0-9]/g, '');
+        const container = document.getElementById(`media_${mxcClean}`);
+        if (!container) return;
+
+        if (mime.startsWith('image/')) {
+            container.innerHTML = `<img src="data:${mime};base64,${b64}">`;
+        } else if (mime.startsWith('audio/')) {
+            container.innerHTML = `<audio controls src="data:${mime};base64,${b64}"></audio>`;
+        } else if (mime.startsWith('video/')) {
+            container.innerHTML = `<video controls src="data:${mime};base64,${b64}"></video>`;
+        } else {
+            container.innerHTML = `<a class="btn-download" href="data:${mime};base64,${b64}" download>Guardar Arquivo (${mime})</a>`;
+        }
+        scrollBottom();
+    }
+</script>
+
+</body>
+</html>
