@@ -17,7 +17,6 @@ Para fins acadêmicos e para demonstrar o conhecimento nos níveis da camada de 
 - `index.html` - Interface do usuário (Frontend Web Client). Se conecta a ponte (BFF) via WebSocket.
 - `matrix_async_core.py` / `async_matrix_client.py` - Núcleo assíncrono bare-metal que manipula os sockets TCP para interagir com a API do Matrix.
 - `http_parser.py` - Tratamento de streams brutos de texto para o protocolo HTTP.
-- `main.py` - Interface simplificada de terminal em modo texto (síncrona / multi-thread) para testes imediatos.
 
 ## Como Executar
 
@@ -27,16 +26,9 @@ Para fins acadêmicos e para demonstrar o conhecimento nos níveis da camada de 
 - O projeto usa predominantemente a biblioteca padrão do Python (`socket`, `ssl`, `asyncio`, `json`, `threading`).
 - Instalar dependências de WebSockets se for rodar o servidor BFF completo para o frontend `index.html`.
 
-### Executando em Modo Terminal (CLI)
-
-```bash
-python main.py
-```
-*(Abra o `main.py` para configurar seu usuário, senha e ID da sala antes de rodar)*.
-
 ### Executando a Interface Web (BFF)
 
-1. Suba o servidor WebSocket/BFF (necessário rodar o script responsável por ouvir a porta `8765`).
+1. Suba o servidor WebSocket/BFF rodando o script do gateway (o responsável por ouvir a porta `8765`).
 2. Abra o arquivo `index.html` em seu navegador.
 3. Preencha seu usuário e senha.
 4. Preencha o `ID da Sala` (*Room ID*). Observe que Room IDs no Matrix começam com o caractere `!` e não com `#`.
