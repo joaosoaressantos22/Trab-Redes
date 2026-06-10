@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:13-alpine
+    container_name: bff_matrix_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=dendrite
+      - POSTGRES_USER=dendrite
+      - POSTGRES_PASSWORD=dendrite
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dendrite -d dendrite"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  dendrite:
+    image: matrixdotorg/dendrite-monolith:latest
+    container_name: bff_matrix_dendrite
+    command: ["-config", "/etc/dendrite/dendrite.yaml", "-really-enable-open-registration"]
+    ports:
+      - "8008:8008"
+      - "8448:8448"
+    volumes:
+      - ./dendrite.yaml:/etc/dendrite/dendrite.yaml
+      - ./matrix_key.pem:/etc/dendrite/matrix_key.pem
+      - ./data:/data
+    environment:
+      - DENDRITE_TRACE_HTTP=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

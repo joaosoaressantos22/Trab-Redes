@@ -1,0 +1,30 @@
+version: 2
+global:
+  server_name: localhost
+  private_key: /etc/dendrite/matrix_key.pem
+  trusted_third_party_id_servers:
+    - matrix.org
+    - vector.im
+  metrics:
+    enabled: false
+  database:
+    connection_string: "postgres://dendrite:dendrite@postgres/dendrite?sslmode=disable"
+    max_open_conns: 90
+    max_idle_conns: 5
+
+client_api:
+  registration_disabled: false
+  registration_shared_secret: "acad_secret_l4"
+  rate_limiting:
+    enabled: false
+
+media_api:
+  base_path: /data/media
+  dynamic_thumbnails: true
+
+sync_api:
+  real_ip_header: X-Real-IP
+
+logging:
+  - type: std
+    level: info
