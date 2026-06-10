@@ -20,16 +20,24 @@ async def loop_de_sincronizacao(ws, cliente_matrix):
                     salas_iniciais = []
                     
                     for sala_id, dados_sala in dados["rooms"]["join"].items():
-                        # Extrai o nome da sala no primeiro sync para popular o menu lateral
                         if primeira_sincronizacao:
                             nome_sala = sala_id
+                            
+                            # Combina os eventos de estado base com os eventos da timeline recente
                             estado_eventos = dados_sala.get("state", {}).get("events", [])
-                            for ev in estado_eventos:
+                            timeline_eventos = dados_sala.get("timeline", {}).get("events", [])
+                            todos_eventos = estado_eventos + timeline_eventos
+                            
+                            for ev in todos_eventos:
+                                # Captura o nome explícito da sala
                                 if ev.get("type") == "m.room.name":
                                     nome_sala = ev.get("content", {}).get("name", sala_id)
+                                # Fallback: Se ainda estiver com o ID bruto, tenta usar o Alias (ex: #matrix:matrix.org)
+                                elif ev.get("type") == "m.room.canonical_alias" and nome_sala == sala_id:
+                                    nome_sala = ev.get("content", {}).get("alias", sala_id)
+                                    
                             salas_iniciais.append({"id": sala_id, "nome": nome_sala})
 
-                        # Processa a timeline para eventos em tempo real
                         eventos = dados_sala.get("timeline", {}).get("events", [])
                         for ev in eventos:
                             if ev.get("type") == "m.room.message" and not primeira_sincronizacao:
@@ -55,6 +63,9 @@ async def loop_de_sincronizacao(ws, cliente_matrix):
                 logger.error(f"Erro de Conexão L4 no Sync: {e}")
                 await ws.send(json.dumps({"tipo": "erro", "mensagem": "Conexão L4 com Homeserver perdida."}))
                 break
+            except Exception as e:
+                logger.error(f"Erro inesperado no loop L7: {e}")
+                await asyncio.sleep(5)
     except asyncio.CancelledError:
         logger.info("Loop de sincronização cancelado.")
 
@@ -95,11 +106,16 @@ async def roteador_ws(ws):
                 
                 elif acao == "criar_sala" and cliente:
                     resp = await cliente.criar_sala(comando.get("nome"), comando.get("alias"))
-                    await ws.send(json.dumps({"tipo": "sala_criada", "room_id": resp.get("room_id")}))
+                    await ws.send(json.dumps({"tipo": "sala_criada", "room_id": resp.get("room_id"), "nome": comando.get("nome")}))
                     
                 elif acao == "entrar_sala" and cliente:
-                    resp = await cliente.entrar_sala(comando.get("referencia"))
-                    await ws.send(json.dumps({"tipo": "sala_entrou", "room_id": resp.get("room_id")}))
+                    resp = await cliente.entrar_sala(comando.get("referencia"), comando.get("servidor_federacao"))
+                    await ws.send(json.dumps({"tipo": "sala_entrou", "room_id": resp.get("room_id"), "nome": comando.get("referencia")}))
+                    
+                elif acao == "listar_federacao" and cliente:
+                    resp = await cliente.listar_salas_publicas(comando.get("servidor"))
+                    salas_filtradas = [s for s in resp.get("chunk", []) if s.get("canonical_alias")]
+                    await ws.send(json.dumps({"tipo": "resultado_federacao", "salas": salas_filtradas}))
                     
                 elif acao == "buscar_historico" and cliente:
                     sala_id = comando.get("sala")
@@ -131,7 +147,7 @@ async def roteador_ws(ws):
                 logger.warning(f"BFF Exception: {str(e)}")
                 await ws.send(json.dumps({"tipo": "erro", "mensagem": str(e)}))
             except Exception as e:
-                logger.error(f"Erro Crítico não tratado: {str(e)}")
+                logger.error(f"Erro Crítico não tratado L7: {str(e)}")
                 await ws.send(json.dumps({"tipo": "erro", "mensagem": "Erro interno no Gateway L7."}))
 
     except websockets.exceptions.ConnectionClosed:

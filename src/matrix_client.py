@@ -27,9 +27,14 @@ class BareMetalAsyncClient:
         self.contexto_tls = ssl.create_default_context() if self.usar_tls else None
 
     async def _executar_http(self, metodo, caminho, corpo_bytes=b"", content_type="application/json", timeout_leitura=35.0, retornar_bytes=False):
+        kwargs = {}
+        if self.usar_tls:
+            kwargs["ssl"] = self.contexto_tls
+            kwargs["server_hostname"] = self.host # Obrigatório para SNI em homeservers roteados via CDN
+            
         try:
-            reader, writer = await asyncio.open_connection(self.host, self.port, ssl=self.contexto_tls)
-        except (ConnectionRefusedError, socket.gaierror, asyncio.TimeoutError) as e:
+            reader, writer = await asyncio.open_connection(self.host, self.port, **kwargs)
+        except (ConnectionRefusedError, socket.gaierror, asyncio.TimeoutError, ssl.SSLError) as e:
             raise MatrixConnectionError(f"Falha de conexão L4 com {self.host}:{self.port} - {str(e)}")
         
         req_bytes = HttpProtocolHandler.build_request(
@@ -43,8 +48,13 @@ class BareMetalAsyncClient:
         try:
             status_code, headers_texto, corpo_final = await HttpProtocolHandler.parse_response(reader, timeout_leitura)
         finally:
-            writer.close()
-            await writer.wait_closed()
+            if not writer.is_closing():
+                writer.close()
+            try:
+                await writer.wait_closed()
+            except (ssl.SSLError, ConnectionError, OSError):
+                # O payload HTTP L7 já foi extraído com sucesso.
+                pass
 
         if status_code >= 400:
             erro_msg = "Erro desconhecido L7"
@@ -104,12 +114,20 @@ class BareMetalAsyncClient:
         payload = json.dumps(corpo).encode('utf-8')
         return await self._executar_http("POST", "/_matrix/client/v3/createRoom", corpo_bytes=payload)
 
-    async def entrar_sala(self, room_id_or_alias):
+    async def listar_salas_publicas(self, server_name=None, limit=50):
+        caminho = f"/_matrix/client/v3/publicRooms?limit={limit}"
+        if server_name:
+            caminho += f"&server={urllib.parse.quote(server_name)}"
+        return await self._executar_http("GET", caminho)
+
+    async def entrar_sala(self, room_id_or_alias, server_name=None):
         caminho_seguro = urllib.parse.quote(room_id_or_alias)
-        return await self._executar_http("POST", f"/_matrix/client/v3/join/{caminho_seguro}")
+        caminho = f"/_matrix/client/v3/join/{caminho_seguro}"
+        if server_name:
+            caminho += f"?server_name={urllib.parse.quote(server_name)}"
+        return await self._executar_http("POST", caminho)
 
     async def buscar_historico(self, room_id, limit=50):
-        # Direção backward ('b') a partir do ponto atual conhecido da sala.
         caminho = f"/_matrix/client/v3/rooms/{room_id}/messages?dir=b&limit={limit}"
         return await self._executar_http("GET", caminho)
 

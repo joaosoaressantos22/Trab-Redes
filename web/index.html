@@ -32,8 +32,9 @@
         .sidebar-header { padding: 20px; background-color: rgba(0,0,0,0.2); border-bottom: 1px solid #333; display: flex; flex-direction: column; gap: 10px;}
         .sidebar-header h3 { font-size: 1rem; color: #fff; }
         
-        .room-actions { padding: 15px; display: flex; gap: 10px; border-bottom: 1px solid #333; }
-        .room-actions button { padding: 8px; font-size: 0.85rem; }
+        .room-actions { padding: 15px; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #333; }
+        .room-actions button { flex: 1; padding: 8px; font-size: 0.8rem; }
+        .btn-fed { background-color: #00796b !important; } .btn-fed:hover { background-color: #004d40 !important; }
 
         .room-list { flex-grow: 1; overflow-y: auto; }
         .room-item { padding: 15px; cursor: pointer; border-bottom: 1px solid #2a2a3b; transition: 0.2s; }
@@ -68,16 +69,43 @@
         #btn-attach:hover { color: var(--primary); }
         #file-input-hidden { display: none; }
         #btn-send { width: auto; padding: 12px 25px; }
+
+        /* Modal Federação */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: var(--bg-panel); width: 600px; max-height: 80vh; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .modal-header { padding: 20px; background: var(--bg-input); border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .fed-room-card { background: var(--bg-dark); padding: 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333; }
+        .fed-room-info h4 { margin-bottom: 5px; font-size: 1rem; }
+        .fed-room-info span { font-size: 0.8rem; color: var(--text-muted); }
     </style>
 </head>
 <body>
 
 <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
 
+<div class="modal-overlay" id="modal-fed">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🌐 Diretório da Federação</h3>
+            <button onclick="fecharModalFed()" style="width:auto; padding: 6px 12px; background: #c62828">Fechar</button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <input type="text" id="fed-server-input" placeholder="Servidor Alvo (ex: matrix.org)" value="matrix.org" style="margin-bottom:0;">
+                <button onclick="buscarFederacao()" style="width:120px;">Pesquisar</button>
+            </div>
+            <div id="fed-results" style="display:flex; flex-direction:column; gap:10px; color: var(--text-muted); font-size:0.9rem;">
+                Insira o domínio de um Homeserver público e clique em pesquisar.
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="auth-screen">
     <div class="auth-card">
         <h2>Matrix BFF L4/L7</h2>
-        <input type="text" id="homeserver" placeholder="Homeserver (ex: localhost:8008)" value="localhost:8008">
+        <input type="text" id="homeserver" placeholder="Seu Homeserver (ex: localhost:8008)">
         <input type="text" id="user" placeholder="Usuário">
         <input type="password" id="passwd" placeholder="Senha">
         <button id="btn-login" onclick="conectar()">Autenticar</button>
@@ -92,8 +120,9 @@
             <span id="logged-user-display" style="font-size: 0.9rem; color: var(--text-muted)"></span>
         </div>
         <div class="room-actions">
-            <button onclick="promptCriarSala()">+ Criar Sala</button>
-            <button onclick="promptEntrarSala()">Entrar (ID/Alias)</button>
+            <button onclick="promptCriarSala()">+ Criar</button>
+            <button onclick="promptEntrarSala()">Entrar</button>
+            <button onclick="abrirModalFed()" class="btn-fed">🌐 Explorar</button>
         </div>
         <div class="room-list" id="lista-salas-container">
             <div style="padding: 15px; color: var(--text-muted); font-size: 0.85rem; text-align: center;">Sincronizando Estado...</div>
@@ -164,8 +193,23 @@
     }
 
     function promptEntrarSala() {
-        const ref = prompt("Informe o ID da Sala ou Alias para ingressar (ex: !abc:localhost):");
-        if (ref) ws.send(JSON.stringify({acao: "entrar_sala", referencia: ref}));
+        const ref = prompt("Informe o ID da Sala ou Alias para ingressar (ex: !abc:localhost ou #sala:matrix.org):");
+        if (!ref) return;
+        const srv = prompt("Servidor de Roteamento SNI (Deixe em branco se for local, ou preencha com matrix.org etc):");
+        ws.send(JSON.stringify({acao: "entrar_sala", referencia: ref, servidor_federacao: srv || null}));
+    }
+
+    function abrirModalFed() { document.getElementById('modal-fed').style.display = 'flex'; }
+    function fecharModalFed() { document.getElementById('modal-fed').style.display = 'none'; }
+    function buscarFederacao() {
+        const srv = document.getElementById('fed-server-input').value;
+        document.getElementById('fed-results').innerHTML = "Buscando catálogo no L4...";
+        ws.send(JSON.stringify({acao: "listar_federacao", servidor: srv}));
+    }
+    function ingressarFederacao(alias) {
+        const srv = document.getElementById('fed-server-input').value;
+        ws.send(JSON.stringify({acao: "entrar_sala", referencia: alias, servidor_federacao: srv}));
+        fecharModalFed();
     }
 
     function selecionarSala(salaId, salaNome) {
@@ -249,8 +293,32 @@
                 renderizarListaSalas();
             }
             else if (dados.tipo === "sala_criada" || dados.tipo === "sala_entrou") {
-                sysStatus.innerText = "Sala anexada à pipeline. Aguarde Sync...";
-                setTimeout(() => window.location.reload(), 2000); // Reload força um novo sync limpo
+                sysStatus.innerText = "Sala conectada na pipeline L4!";
+                
+                // Evita criar itens duplicados caso já exista
+                if (!listaSalas.some(s => s.id === dados.room_id)) {
+                    listaSalas.push({id: dados.room_id, nome: dados.nome || dados.room_id});
+                    renderizarListaSalas();
+                }
+                
+                // Transiciona a UI para focar na nova sala sem matar o socket TCP
+                selecionarSala(dados.room_id, dados.nome || dados.room_id);
+            }
+            else if (dados.tipo === "resultado_federacao") {
+                const res = document.getElementById('fed-results');
+                res.innerHTML = "";
+                if(dados.salas.length === 0) res.innerHTML = "Nenhuma sala pública encontrada.";
+                dados.salas.forEach(s => {
+                    res.innerHTML += `
+                        <div class="fed-room-card">
+                            <div class="fed-room-info">
+                                <h4>${s.name || s.canonical_alias}</h4>
+                                <span>${s.canonical_alias} | ${s.num_joined_members} membros</span>
+                            </div>
+                            <button onclick="ingressarFederacao('${s.canonical_alias}')" style="width:auto; padding:8px 15px;">Entrar</button>
+                        </div>
+                    `;
+                });
             }
             else if (dados.tipo === "historico") {
                 if(document.getElementById('active-room-id').value === dados.sala) {
