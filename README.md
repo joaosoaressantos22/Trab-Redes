@@ -24,7 +24,7 @@ Lista de dependências necessárias:
 
 ### Instruções de Execução
 1. Clone o repositório:
-`git clone https://github.com/joaosoaressantos22/Trab-Redes`
+`git clone https://github.com/joaosoaressantos22/Trab-Redes.git`
 
 2. Instale as dependências:
 `pip install websockets`
